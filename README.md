@@ -360,7 +360,3 @@ python validate_module4.py --router-debug
 ## Contributors
 
 This project was developed as a modular NLP final project with separate workstreams for language detection, emotion classification, intent routing, and RAG-based support generation.
-
-## License
-
-Add the project license here if one is required for distribution.
