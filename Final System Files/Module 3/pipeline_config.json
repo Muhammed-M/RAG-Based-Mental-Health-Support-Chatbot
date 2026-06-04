@@ -1,0 +1,276 @@
+{
+  "pipeline_config": {
+    "groq": {
+      "model": "llama-3.3-70b-versatile",
+      "temperature": 0.7,
+      "max_tokens": 300,
+      "intent_temperature": 0.0,
+      "intent_max_tokens": 200
+    },
+    "intent_classification": {
+      "confidence_threshold": 0.50,
+      "max_retries": 3,
+      "regex_max_words": 4
+    },
+    "emotion_detection": {
+      "max_len": 128,
+      "high_distress_threshold": 0.6,
+      "high_distress_emotions": ["sadness", "anger", "fear"]
+    },
+    "rag_retrieval": {
+      "k_chunks": 3,
+      "chunk_relevance_threshold": 0.0,
+      "chunk_source_type": "knowledge_base"
+    },
+    "languages": {
+      "supported": 20,
+      "iso_codes": [
+        "ar", "bg", "de", "el", "en",
+        "es", "fr", "hi", "it", "ja",
+        "nl", "pl", "pt", "ru", "sw",
+        "th", "tr", "ur", "vi", "zh"
+      ]
+    },
+    "intents": {
+      "list": [
+        "greeting",
+        "goodbye",
+        "gratitude",
+        "asking_mental_health_question",
+        "out_of_scope"
+      ],
+      "direct_response_intents": ["greeting", "goodbye", "gratitude"],
+      "rag_pipeline_intents": ["asking_mental_health_question"]
+    },
+    "crisis_detection": {
+      "enabled": true,
+      "keyword_languages": ["en", "ar", "fr", "de", "es"]
+    },
+    "post_guardrails": {
+      "hallucination_check": true,
+      "suspicious_claims_detection": true
+    }
+  },
+  "keywords": {
+    "crisis_keywords_en": [
+      "kill myself",
+      "end my life",
+      "want to die",
+      "suicide",
+      "suicidal",
+      "hurt myself",
+      "self harm",
+      "self-harm",
+      "cutting myself",
+      "want to hurt myself",
+      "no reason to live",
+      "better off dead",
+      "overdose",
+      "jump off",
+      "hang myself"
+    ],
+    "crisis_keywords_ar": [
+      "أريد الموت",
+      "انتحار",
+      "أؤذي نفسي",
+      "أقتل نفسي",
+      "لا أريد العيش"
+    ],
+    "crisis_keywords_fr": [
+      "me suicider",
+      "me tuer",
+      "mettre fin à ma vie"
+    ],
+    "crisis_keywords_de": [
+      "mich umbringen",
+      "suizid",
+      "selbstmord"
+    ],
+    "crisis_keywords_es": [
+      "suicidarme",
+      "matarme",
+      "quiero morir"
+    ],
+    "regex_patterns_greeting": [
+      "\\bhi\\b",
+      "\\bhello\\b",
+      "\\bhey\\b",
+      "\\bgood morning\\b",
+      "\\bgood evening\\b",
+      "\\bgood afternoon\\b",
+      "\\bhow are you\\b",
+      "\\bhowdy\\b",
+      "\\bgreetings\\b"
+    ],
+    "regex_patterns_goodbye": [
+      "\\bbye\\b",
+      "\\bgoodbye\\b",
+      "\\bfarewell\\b",
+      "\\bsee you\\b",
+      "\\btake care\\b",
+      "\\bgoodnight\\b",
+      "\\bi have to go\\b",
+      "\\bi need to go\\b",
+      "\\btalk to you later\\b",
+      "\\bcatch you later\\b"
+    ],
+    "regex_patterns_gratitude": [
+      "\\bthank you\\b",
+      "\\bthanks\\b",
+      "\\bthank u\\b",
+      "\\bi appreciate\\b",
+      "\\bgrateful\\b",
+      "\\bmany thanks\\b"
+    ]
+  },
+  "emotions": {
+    "labels": {
+      "0": "sadness",
+      "1": "joy",
+      "2": "love",
+      "3": "anger",
+      "4": "fear",
+      "5": "surprise"
+    }
+  },
+  "responses": {
+    "greeting_en": [
+      "Hello! I'm here to support you. How are you feeling today?",
+      "Hi there! I'm your mental health support assistant. What's on your mind?"
+    ],
+    "greeting_ar": [
+      "مرحباً! أنا هنا لدعمك. كيف تشعر اليوم؟"
+    ],
+    "goodbye_en": [
+      "Take care of yourself. Support is always here when you need it.",
+      "Goodbye! I hope our conversation was helpful. Be well."
+    ],
+    "goodbye_ar": [
+      "اعتنِ بنفسك. الدعم دائماً هنا عندما تحتاجه."
+    ],
+    "gratitude_en": [
+      "You're very welcome. I'm always here for you.",
+      "I'm glad I could help. Please reach out anytime."
+    ],
+    "gratitude_ar": [
+      "على الرحب والسعة. أنا دائماً هنا من أجلك."
+    ],
+    "out_of_scope_en": "I'm specialized in mental health support. Is there anything related to your emotional wellbeing I can help with?",
+    "out_of_scope_ar": "أنا متخصص في دعم الصحة النفسية. هل هناك شيء يتعلق بصحتك النفسية يمكنني مساعدتك به?",
+    "clarification_request": "I want to make sure I understand you correctly. Could you rephrase that?",
+    "crisis_response": "I'm really concerned about what you've shared, and I want you to know you're not alone. Please reach out to a crisis helpline immediately — they are available 24/7:\n\n🆘 International Association for Suicide Prevention: https://www.iasp.info/resources/Crisis_Centres/\n🆘 Crisis Text Line: Text HOME to 741741 (US)\n🆘 Befrienders Worldwide: https://www.befrienders.org\n\nPlease talk to someone right now. You matter."
+  },
+  "test_cases": [
+    {
+      "id": 1,
+      "query": "Hello! How are you today?",
+      "description": "Simple greeting",
+      "expected_route": "direct",
+      "expected_intent": "greeting",
+      "expected_detected_language": "en",
+      "expected_verified_language": "en"
+    },
+    {
+      "id": 2,
+      "query": "I feel very anxious and can't sleep",
+      "description": "Mental health question (English)",
+      "expected_route": "rag_pipeline",
+      "expected_intent": "asking_mental_health_question",
+      "expected_detected_language": "en",
+      "expected_verified_language": "en"
+    },
+    {
+      "id": 3,
+      "query": "Thank you so much for your help",
+      "description": "Gratitude expression",
+      "expected_route": "direct",
+      "expected_intent": "gratitude",
+      "expected_detected_language": "en",
+      "expected_verified_language": "en"
+    },
+    {
+      "id": 4,
+      "query": "Goodbye, take care",
+      "description": "Goodbye message",
+      "expected_route": "direct",
+      "expected_intent": "goodbye",
+      "expected_detected_language": "en",
+      "expected_verified_language": "en"
+    },
+    {
+      "id": 5,
+      "query": "What is the weather today?",
+      "description": "Out-of-scope question",
+      "expected_route": "out_of_scope",
+      "expected_intent": "out_of_scope",
+      "expected_detected_language": "en",
+      "expected_verified_language": "en"
+    },
+    {
+      "id": 6,
+      "query": "Mi sento molto triste e solo",
+      "description": "Italian mental health query with detector/LLM language mismatch",
+      "expected_route": "rag_pipeline",
+      "expected_intent": "asking_mental_health_question",
+      "expected_detected_language": "es",
+      "expected_verified_language": "it"
+    },
+    {
+      "id": 7,
+      "query": "Je me sens tres triste et seul",
+      "description": "French mental health question",
+      "expected_route": "rag_pipeline",
+      "expected_intent": "asking_mental_health_question",
+      "expected_detected_language": "fr",
+      "expected_verified_language": "fr"
+    },
+    {
+      "id": 8,
+      "query": "Quelle heure est-il?",
+      "description": "French out-of-scope question",
+      "expected_route": "out_of_scope",
+      "expected_intent": "out_of_scope",
+      "expected_detected_language": "fr",
+      "expected_verified_language": "fr"
+    },
+    {
+      "id": 9,
+      "query": "I said goodbye to my old bad habits",
+      "description": "Goodbye keyword in mental-health context",
+      "expected_route": "rag_pipeline",
+      "expected_intent": "asking_mental_health_question",
+      "expected_detected_language": "en",
+      "expected_verified_language": "en"
+    },
+    {
+      "id": 10,
+      "query": "i cant stpo crying wat do i do",
+      "description": "Typo-heavy mental health question",
+      "expected_route": "rag_pipeline",
+      "expected_intent": "asking_mental_health_question",
+      "expected_detected_language": "en",
+      "expected_verified_language": "en"
+    },
+    {
+      "id": 11,
+      "query": "Hi",
+      "description": "Short greeting edge case; detector may misread and regex bypasses LLM",
+      "expected_route": "direct",
+      "expected_intent": "greeting",
+      "expected_detected_language": "sw"
+    }
+  ],
+  "paths": {
+    "base_dir": ".",
+    "module_1_dir": "../Module 1",
+    "module_2_dir": "../Module 2",
+    "module_3_dir": ".",
+    "module_4_dir": "../Module 4",
+    "models_1_dir": "../Module 1/models",
+    "models_2_dir": "../Module 2/models",
+    "tfidf_vectorizer": "../Module 1/models/tfidf_vectorizer.pkl",
+    "language_classifier": "../Module 1/models/language_classifier.pkl",
+    "emotion_tokenizer": "../Module 2/models/emotion_classifier",
+    "emotion_model": "../Module 2/models/emotion_classifier"
+  }
+}

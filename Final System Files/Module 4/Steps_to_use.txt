@@ -1,0 +1,95 @@
+Mento - Module 4 usage steps
+============================
+
+1. Open a terminal in:
+   D:\Python\saqr_draft\Module 4
+
+2. Create and activate a virtual environment if you do not already have one:
+   python -m venv .venv
+   .venv\Scripts\activate
+
+3. Install dependencies:
+   pip install -r requirements.txt
+
+4. Check Module 4/.env contains these values:
+   INTENT_GROQ_API_KEY
+   RAG_GROQ_API_KEY
+   QDRANT_URL
+   QDRANT_API_KEY
+   QDRANT_COLLECTION
+
+   INTENT_GROQ_API_KEY is used for the Module 3-style LangChain Groq routing call:
+   language verification, intent classification, translation, and typo cleanup.
+
+   RAG_GROQ_API_KEY is used for the Module 4 conversational RAG answer generation
+   and post-guardrail LLM check.
+
+   Backward compatibility:
+   GROQ_API_KEY can still be used as a fallback, but the recommended setup is to use
+   the two separate keys above.
+
+   Optional LangSmith tracing values:
+   LANGSMITH_TRACING=true
+   LANGCHAIN_TRACING_V2=true
+   LANGSMITH_API_KEY=your_langsmith_key
+   LANGSMITH_PROJECT=Mento-Module-4
+
+5. Build or verify the RAG cache.
+   The app uses Qdrant as the persistent vector cache. If the configured collection already
+   contains vectors, Mento reuses it. If the collection is missing or empty, it loads:
+   https://huggingface.co/datasets/Amod/mental_health_counseling_conversations
+   then chunks and embeds it with sentence-transformers/all-MiniLM-L6-v2.
+
+   To force a rebuild, temporarily add this to Module 4/.env:
+   MENTO_FORCE_REBUILD_INDEX=true
+
+   You can also call this endpoint after starting Flask:
+   POST http://127.0.0.1:5000/api/index/rebuild
+
+6. Run a local validation check:
+   python validate_module4.py --router-debug
+
+   Optional full Groq + RAG test:
+   python validate_module4.py --e2e
+
+   If Windows memory/pagefile is low, Mento automatically uses a lighter heuristic
+   emotion fallback instead of loading the large local Module 2 PyTorch model.
+   You can force that behavior with:
+   MENTO_USE_LOCAL_EMOTION_MODEL=false
+
+   Thresholds can be adjusted in Module 4/.env:
+   MENTO_MIN_AVAILABLE_PAGEFILE_MB=4096
+   MENTO_MIN_EMBEDDING_PAGEFILE_MB=1024
+
+7. Start the Flask app:
+   python app.py
+
+8. Open the local front-end:
+   http://127.0.0.1:5000
+
+9. Validate the required pipeline behavior:
+   - If the user asks the system name, Mento answers that its name is Mento.
+   - Crisis keywords return the immediate hardcoded crisis response.
+   - Module 1 gives a local TF-IDF language hint.
+   - LangChain + Groq performs the single routing call:
+     language verification, intent classification, English translation, and typo cleanup.
+   - If Module 1 and Groq disagree on language, the Groq verified language is used.
+   - Greeting, goodbye, gratitude, and out_of_scope messages are handled politely with LangChain + Groq.
+   - Mental-health questions run Module 2 emotion detection on cleaned English text.
+   - Module 4 retrieves Qdrant RAG chunks using the cleaned English query.
+   - The conversational RAG chain uses chat memory and streams the response.
+   - The final response is written in the verified user language.
+   - Post-guardrails check for unsafe hallucinations and revise if needed.
+
+10. Useful health check:
+   GET http://127.0.0.1:5000/api/health
+
+11. Notes:
+   - The system name is Mento.
+   - The first index build can take time because it downloads the Hugging Face dataset and
+     creates embeddings. Later runs reuse the Qdrant collection.
+   - Module 1 model filenames are handled defensively. The app accepts both the notebook names
+     and the current files in Module 1/models.
+   - If Windows shows "The paging file is too small for this operation to complete",
+     close memory-heavy apps or increase the Windows virtual memory/pagefile size. The app now
+     catches that error and uses a safe fallback response instead of showing the raw OS error.
