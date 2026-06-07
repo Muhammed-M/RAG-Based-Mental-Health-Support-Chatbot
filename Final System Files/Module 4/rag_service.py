@@ -40,9 +40,12 @@ class RAGService:
             try:
                 from langchain_huggingface import HuggingFaceEmbeddings
             except ImportError:
-                from langchain_community.embeddings import HuggingFaceEmbeddings
+                from langchain_community.embeddings import \
+                    HuggingFaceEmbeddings
 
-            self._embeddings = HuggingFaceEmbeddings(model_name=self.settings.embedding_model)
+            self._embeddings = HuggingFaceEmbeddings(
+                model_name=self.settings.embedding_model
+            )
         return self._embeddings
 
     @property
@@ -86,12 +89,20 @@ class RAGService:
     def chain(self) -> Any:
         if self._chain is None:
             try:
-                from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-                from langchain.chains.combine_documents import create_stuff_documents_chain
+                from langchain.chains import (create_history_aware_retriever,
+                                              create_retrieval_chain)
+                from langchain.chains.combine_documents import \
+                    create_stuff_documents_chain
             except ModuleNotFoundError:
-                from langchain_classic.chains import create_history_aware_retriever, create_retrieval_chain
-                from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-            from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+                from langchain_classic.chains import (
+                    create_history_aware_retriever,
+                    create_retrieval_chain,
+                )
+                from langchain_classic.chains.combine_documents import (
+                    create_stuff_documents_chain,
+                )
+            from langchain_core.prompts import (ChatPromptTemplate,
+                                                MessagesPlaceholder)
 
             contextualize_prompt = ChatPromptTemplate.from_messages(
                 [
@@ -114,7 +125,9 @@ class RAGService:
                 ]
             )
             document_chain = create_stuff_documents_chain(self.llm, qa_prompt)
-            self._chain = create_retrieval_chain(history_aware_retriever, document_chain)
+            self._chain = create_retrieval_chain(
+                history_aware_retriever, document_chain
+            )
         return self._chain
 
     def ensure_index(self) -> dict[str, Any]:
@@ -149,7 +162,9 @@ class RAGService:
             self.client.delete_collection(self.settings.qdrant_collection)
 
         vector_size = len(self.embeddings.embed_query("Mento vector size probe"))
-        vectors_config: Any = models.VectorParams(size=vector_size, distance=models.Distance.COSINE)
+        vectors_config: Any = models.VectorParams(
+            size=vector_size, distance=models.Distance.COSINE
+        )
         if self.settings.qdrant_vector_name:
             vectors_config = {
                 self.settings.qdrant_vector_name: models.VectorParams(
@@ -175,7 +190,9 @@ class RAGService:
             "document_chunks": len(documents),
             "collection": self.settings.qdrant_collection,
         }
-        self.index_metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+        self.index_metadata_path.write_text(
+            json.dumps(metadata, indent=2), encoding="utf-8"
+        )
         return metadata
 
     def load_and_chunk_dataset(self) -> Iterable[Document]:
@@ -189,21 +206,35 @@ class RAGService:
         dataset = dataset_dict[split_name]
 
         columns = list(dataset.column_names)
-        context_column = self._choose_column(columns, ["Context", "context", "question", "Question", "input", "text", "prompt"])
-        response_column = self._choose_column(columns, ["Response", "response", "answer", "Answer", "output", "completion"])
+        context_column = self._choose_column(
+            columns,
+            ["Context", "context", "question", "Question", "input", "text", "prompt"],
+        )
+        response_column = self._choose_column(
+            columns,
+            ["Response", "response", "answer", "Answer", "output", "completion"],
+        )
 
-        rows_limit = self.settings.max_dataset_rows if self.settings.max_dataset_rows > 0 else len(dataset)
+        rows_limit = (
+            self.settings.max_dataset_rows
+            if self.settings.max_dataset_rows > 0
+            else len(dataset)
+        )
         raw_documents: list[Document] = []
         for idx, row in enumerate(dataset):
             if idx >= rows_limit:
                 break
 
             context = str(row.get(context_column, "")).strip() if context_column else ""
-            response = str(row.get(response_column, "")).strip() if response_column else ""
+            response = (
+                str(row.get(response_column, "")).strip() if response_column else ""
+            )
             if not context and not response:
                 continue
 
-            page_content = f"Client concern:\n{context}\n\nCounselor response:\n{response}".strip()
+            page_content = (
+                f"Client concern:\n{context}\n\nCounselor response:\n{response}".strip()
+            )
             raw_documents.append(
                 Document(
                     page_content=page_content,
@@ -265,7 +296,9 @@ class RAGService:
         }
         if self.index_metadata_path.exists():
             try:
-                metadata["last_build"] = json.loads(self.index_metadata_path.read_text(encoding="utf-8"))
+                metadata["last_build"] = json.loads(
+                    self.index_metadata_path.read_text(encoding="utf-8")
+                )
             except json.JSONDecodeError:
                 pass
         return metadata

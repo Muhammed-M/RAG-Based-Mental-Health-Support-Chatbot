@@ -6,7 +6,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 
@@ -44,7 +43,9 @@ class Settings:
     project_root: Path = PROJECT_ROOT
 
     module1_models_dir: Path = PROJECT_ROOT / "Module 1" / "models"
-    module2_model_dir: Path = PROJECT_ROOT / "Module 2" / "models" / "emotion_classifier"
+    module2_model_dir: Path = (
+        PROJECT_ROOT / "Module 2" / "models" / "emotion_classifier"
+    )
 
     groq_api_key: str = ""
     intent_groq_api_key: str = ""
@@ -52,12 +53,12 @@ class Settings:
     groq_model: str = "llama-3.3-70b-versatile"
     intent_groq_model: str = "llama-3.3-70b-versatile"
     rag_groq_model: str = "llama-3.3-70b-versatile"
-    groq_temperature: float = 0.35
-    groq_max_tokens: int = 420
+    groq_temperature: float = 0.3
+    groq_max_tokens: int = 700
 
     qdrant_url: str = ""
     qdrant_api_key: str = ""
-    qdrant_collection: str = "Mental-Health"
+    qdrant_collection: str = "Mental-Health-Counseling-Embeddings"
     qdrant_vector_name: str | None = None
 
     dataset_name: str = "Amod/mental_health_counseling_conversations"
@@ -65,7 +66,7 @@ class Settings:
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     chunk_size: int = 900
     chunk_overlap: int = 120
-    retriever_k: int = 3
+    retriever_k: int = 4
     max_dataset_rows: int = 0
     force_rebuild_index: bool = False
     build_index_on_startup: bool = False
@@ -73,7 +74,7 @@ class Settings:
     min_available_pagefile_mb: int = 4096
     min_embedding_pagefile_mb: int = 1024
 
-    langsmith_project: str = "Mento-Module-4"
+    langsmith_project: str = "Mental Health Rag ChatBot"
     flask_host: str = "127.0.0.1"
     flask_port: int = 5000
     flask_debug: bool = True
@@ -84,7 +85,11 @@ def load_settings() -> Settings:
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-    langsmith_project = os.getenv("LANGSMITH_PROJECT") or os.getenv("LANGCHAIN_PROJECT") or "Mento-Module-4"
+    langsmith_project = (
+        os.getenv("LANGSMITH_PROJECT")
+        or os.getenv("LANGCHAIN_PROJECT")
+        or "Mental Health Rag ChatBot"
+    )
     if langsmith_project:
         os.environ.setdefault("LANGSMITH_PROJECT", langsmith_project)
         os.environ.setdefault("LANGCHAIN_PROJECT", langsmith_project)
@@ -94,25 +99,30 @@ def load_settings() -> Settings:
 
     return Settings(
         groq_api_key=os.getenv("GROQ_API_KEY", ""),
-        intent_groq_api_key=os.getenv("INTENT_GROQ_API_KEY") or os.getenv("GROQ_API_KEY", ""),
+        intent_groq_api_key=os.getenv("INTENT_GROQ_API_KEY")
+        or os.getenv("GROQ_API_KEY", ""),
         rag_groq_api_key=os.getenv("RAG_GROQ_API_KEY") or os.getenv("GROQ_API_KEY", ""),
         groq_model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
         intent_groq_model=os.getenv("INTENT_GROQ_MODEL")
         or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
         rag_groq_model=os.getenv("RAG_GROQ_MODEL")
         or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-        groq_temperature=_float_env("GROQ_TEMPERATURE", 0.35),
-        groq_max_tokens=_int_env("GROQ_MAX_TOKENS", 420),
+        groq_temperature=_float_env("GROQ_TEMPERATURE", 0.3),
+        groq_max_tokens=_int_env("GROQ_MAX_TOKENS", 700),
         qdrant_url=os.getenv("QDRANT_URL", ""),
         qdrant_api_key=os.getenv("QDRANT_API_KEY", ""),
         qdrant_collection=os.getenv("QDRANT_COLLECTION", "Mental-Health"),
         qdrant_vector_name=os.getenv("QDRANT_VECTOR_NAME") or None,
-        dataset_name=os.getenv("MENTO_DATASET_NAME", "Amod/mental_health_counseling_conversations"),
+        dataset_name=os.getenv(
+            "MENTO_DATASET_NAME", "Amod/mental_health_counseling_conversations"
+        ),
         dataset_split=os.getenv("MENTO_DATASET_SPLIT", "train"),
-        embedding_model=os.getenv("MENTO_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
+        embedding_model=os.getenv(
+            "MENTO_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+        ),
         chunk_size=_int_env("MENTO_CHUNK_SIZE", 900),
         chunk_overlap=_int_env("MENTO_CHUNK_OVERLAP", 120),
-        retriever_k=_int_env("MENTO_RETRIEVER_K", 3),
+        retriever_k=_int_env("MENTO_RETRIEVER_K", 4),
         max_dataset_rows=_int_env("MENTO_MAX_DATASET_ROWS", 0),
         force_rebuild_index=_bool_env("MENTO_FORCE_REBUILD_INDEX", False),
         build_index_on_startup=_bool_env("MENTO_BUILD_INDEX_ON_STARTUP", False),

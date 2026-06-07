@@ -12,7 +12,6 @@ import numpy as np
 
 from settings import Settings
 
-
 LANGUAGE_MAP = {
     0: "ar",
     1: "bg",
@@ -78,6 +77,37 @@ CRISIS_RESPONSE = (
     "near you what is happening right now."
 )
 
+CRISIS_RESPONSES = {
+    "ar": (
+        "أنا قلق جداً مما شاركته، وأريدك أن تعرف أنك لست وحدك. "
+        "إذا كنت قد تؤذي نفسك أو تشعر أنك غير قادر على البقاء آمناً، "
+        "يرجى الاتصال بخدمات الطوارئ المحلية أو خط مساعدة الأزمات فوراً. "
+        "أخبر أيضاً شخصاً قريباً مما يحدث الآن."
+    ),
+    "fr": (
+        "Je suis vraiment préoccupé par ce que vous avez partagé, et je veux que vous sachiez "
+        "que vous n'êtes pas seul. Si vous risquez de vous faire du mal ou si vous ne vous sentez "
+        "pas en sécurité, contactez immédiatement les services d'urgence locaux ou une ligne "
+        "d'aide en cas de crise. Parlez aussi à quelqu'un près de vous de ce qui se passe."
+    ),
+    "de": (
+        "Was Sie geschrieben haben, macht mir große Sorge, und ich möchte, dass Sie wissen, "
+        "dass Sie nicht allein sind. Wenn Sie sich verletzen könnten oder sich nicht sicher fühlen, "
+        "wenden Sie sich sofort an den örtlichen Notdienst oder eine Krisenhotline. "
+        "Bitte informieren Sie auch jemanden in Ihrer Nähe."
+    ),
+    "es": (
+        "Me preocupa mucho lo que has compartido, y quiero que sepas que no estás solo. "
+        "Si podrías hacerte daño o no te sientes seguro, contacta de inmediato con los servicios "
+        "de emergencia locales o una línea de crisis. También cuéntale a alguien cercano lo que "
+        "está pasando ahora."
+    ),
+}
+
+
+def crisis_response_for_language(language: str) -> str:
+    return CRISIS_RESPONSES.get(language, CRISIS_RESPONSE)
+
 
 @dataclass
 class LanguageResult:
@@ -96,8 +126,12 @@ class EmotionResult:
 
 class CrisisDetector:
     def is_crisis(self, text: str) -> bool:
-        normalized = (text or "").lower()
-        return any(keyword.lower() in normalized for words in CRISIS_KEYWORDS.values() for keyword in words)
+        normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
+        return any(
+            keyword.lower() in normalized
+            for words in CRISIS_KEYWORDS.values()
+            for keyword in words
+        )
 
 
 class LanguageDetector:
@@ -111,7 +145,9 @@ class LanguageDetector:
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
-            return joblib.load(self._first_existing(["tfidf_vectorizer.pkl", "ang_vectorizer.pkl"]))
+            return joblib.load(
+                self._first_existing(["tfidf_vectorizer.pkl", "ang_vectorizer.pkl"])
+            )
 
     @cached_property
     def classifier(self) -> Any:
@@ -120,7 +156,9 @@ class LanguageDetector:
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
-            return joblib.load(self._first_existing(["language_classifier.pkl", "ml_lang_model.pkl"]))
+            return joblib.load(
+                self._first_existing(["language_classifier.pkl", "ml_lang_model.pkl"])
+            )
 
     def _first_existing(self, names: list[str]) -> Path:
         for name in names:
@@ -134,9 +172,12 @@ class LanguageDetector:
         if not text or not isinstance(text, str):
             return LanguageResult("en", 0.0)
 
-        features = self.vectorizer.transform([text.strip().lower()])
+        features = self.vectorizer.transform(
+            [re.sub(r"\s+", " ", (text or "").strip().lower())]
+        )
         prediction = self.classifier.predict(features)[0]
-        language = LANGUAGE_MAP.get(int(prediction), str(prediction)) if isinstance(prediction, (int, np.integer)) else str(prediction)
+        print(prediction)
+        language = prediction
 
         confidence = 0.0
         if hasattr(self.classifier, "predict_proba"):
@@ -161,7 +202,9 @@ class EmotionDetector:
         import torch
         from transformers import AutoModelForSequenceClassification
 
-        model = AutoModelForSequenceClassification.from_pretrained(str(self.settings.module2_model_dir))
+        model = AutoModelForSequenceClassification.from_pretrained(
+            str(self.settings.module2_model_dir)
+        )
         model.to(self.device)
         model.eval()
         return model
@@ -183,6 +226,7 @@ class EmotionDetector:
 
         import torch
 
+        text = re.sub(r"\s+", " ", (text or "").strip().lower())
         encoded = self.tokenizer(
             text,
             max_length=max_len,
@@ -194,12 +238,17 @@ class EmotionDetector:
 
         with torch.no_grad():
             outputs = self.model(**encoded)
-            probabilities = torch.softmax(outputs.logits, dim=1)[0].detach().cpu().numpy()
+            probabilities = (
+                torch.softmax(outputs.logits, dim=1)[0].detach().cpu().numpy()
+            )
 
         emotion_id = int(np.argmax(probabilities))
         emotion = ID2EMOTION.get(emotion_id, "unknown")
         confidence = float(probabilities[emotion_id])
-        scores = {ID2EMOTION.get(i, f"label_{i}"): float(score) for i, score in enumerate(probabilities)}
+        scores = {
+            ID2EMOTION.get(i, f"label_{i}"): float(score)
+            for i, score in enumerate(probabilities)
+        }
         high_distress = emotion in {"sadness", "anger", "fear"} and confidence > 0.6
 
         return EmotionResult(
@@ -248,7 +297,7 @@ def has_available_pagefile(min_mb: int) -> bool:
 
 
 def heuristic_emotion(text: str) -> EmotionResult:
-    lowered = (text or "").lower()
+    lowered = re.sub(r"\s+", " ", (text or "").strip().lower())
     buckets = {
         "sadness": [
             "sad",
@@ -303,6 +352,7 @@ def heuristic_emotion(text: str) -> EmotionResult:
                 source="heuristic_memory_safe",
             )
 
+    # Team Note: These are values we picked from our mind
     return EmotionResult(
         emotion="sadness",
         confidence=0.45,
@@ -313,7 +363,7 @@ def heuristic_emotion(text: str) -> EmotionResult:
 
 
 def regex_direct_intent(text: str) -> str | None:
-    stripped = (text or "").strip().lower()
+    stripped = re.sub(r"\s+", " ", (text or "").strip().lower())
     if len(stripped.split()) > 4:
         return None
 
@@ -346,7 +396,10 @@ def regex_direct_intent(text: str) -> str | None:
     }
 
     for intent, intent_patterns in patterns.items():
-        if any(re.search(pattern, stripped, flags=re.IGNORECASE) for pattern in intent_patterns):
+        if any(
+            re.search(pattern, stripped, flags=re.IGNORECASE)
+            for pattern in intent_patterns
+        ):
             return intent
     return None
 
@@ -367,7 +420,10 @@ def is_system_identity_question(text: str) -> bool:
         r"\bمين انت\b",
         r"\bمن أنت\b",
     ]
-    return any(re.search(pattern, normalized, flags=re.IGNORECASE) for pattern in identity_patterns)
+    return any(
+        re.search(pattern, normalized, flags=re.IGNORECASE)
+        for pattern in identity_patterns
+    )
 
 
 def is_followup_affirmation(text: str) -> bool:
@@ -403,7 +459,10 @@ def is_followup_affirmation(text: str) -> bool:
         r"^اه$",
         r"^آه$",
     ]
-    return any(re.search(pattern, normalized, flags=re.IGNORECASE) for pattern in affirmative_patterns)
+    return any(
+        re.search(pattern, normalized, flags=re.IGNORECASE)
+        for pattern in affirmative_patterns
+    )
 
 
 def heuristic_guardrail(user_text: str, generated_response: str) -> dict[str, Any]:
@@ -413,7 +472,7 @@ def heuristic_guardrail(user_text: str, generated_response: str) -> dict[str, An
         ("you have anxiety", "anxiety"),
         ("you are suicidal", "suicide"),
     ]
-    lower_user = (user_text or "").lower()
+    lower_user = re.sub(r"\s+", " ", (user_text or "").strip().lower())
     lower_response = (generated_response or "").lower()
 
     for phrase, condition in false_attributions:

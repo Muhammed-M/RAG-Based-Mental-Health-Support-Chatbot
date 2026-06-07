@@ -64,8 +64,8 @@ async function parseStream(response, assistantBubble) {
         assistantBubble.textContent = payload.message;
       } else if (payload.type === "done") {
         updateMetadata(payload.data);
-        if (payload.data && payload.data.route === "rag_pipeline" && payload.data.translated) {
-          lastMentalHealthTopic = payload.data.translated;
+        if (payload.data && payload.data.mental_health_topic) {
+          lastMentalHealthTopic = payload.data.mental_health_topic;
           localStorage.setItem("mento_last_mental_health_topic", lastMentalHealthTopic);
         }
       }

@@ -8,8 +8,12 @@ from app import get_pipeline
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validate Mento Module 4 wiring.")
-    parser.add_argument("--e2e", action="store_true", help="Run one Groq end-to-end query.")
-    parser.add_argument("--router-debug", action="store_true", help="Print the raw router result.")
+    parser.add_argument(
+        "--e2e", action="store_true", help="Run one Groq end-to-end query."
+    )
+    parser.add_argument(
+        "--router-debug", action="store_true", help="Print the raw router result."
+    )
     args = parser.parse_args()
 
     pipeline = get_pipeline()
@@ -29,13 +33,17 @@ def main() -> None:
     print(f"RAG retrieval: {len(chunks)} chunks")
 
     if args.router_debug:
-        result = pipeline.analyze_message("I feel anxious and cannot sleep. What can I do?", "en")
+        result = pipeline.analyze_message(
+            "I feel anxious and cannot sleep. What can I do?", "en"
+        )
         print(f"Router: {result}")
 
     if args.e2e:
         text = ""
         final = None
-        for event in pipeline.stream("I feel anxious and cannot sleep. What can I do?", "validation-session"):
+        for event in pipeline.stream(
+            "I feel anxious and cannot sleep. What can I do?", "validation-session"
+        ):
             if event.get("type") == "token":
                 text += event.get("text", "")
             elif event.get("type") == "done":
@@ -43,7 +51,9 @@ def main() -> None:
         print(f"E2E route: {final.get('route') if final else None}")
         print(f"E2E intent: {final.get('intent') if final else None}")
         print(f"E2E language: {final.get('language') if final else None}")
-        print(f"E2E emotion: {(final.get('emotion') or {}).get('emotion') if final else None}")
+        print(
+            f"E2E emotion: {(final.get('emotion') or {}).get('emotion') if final else None}"
+        )
         print(f"E2E chunks: {len(final.get('chunks') or []) if final else 0}")
         print(f"E2E response: {text[:300].replace(chr(10), ' ')}")
 

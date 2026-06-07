@@ -2,24 +2,24 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from dataclasses import asdict, dataclass, field
 from typing import Any, Generator
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 
-from components import (
-    CRISIS_RESPONSE,
-    CrisisDetector,
-    EmotionDetector,
-    LanguageDetector,
-    heuristic_guardrail,
-    is_followup_affirmation,
-    is_system_identity_question,
-)
-from prompts import DIRECT_RESPONSE_SYSTEM_PROMPT, GUARDRAIL_SYSTEM_PROMPT, INTENT_SYSTEM_PROMPT, INTENTS
+from components import (CrisisDetector, EmotionDetector, LanguageDetector,
+                        crisis_response_for_language, heuristic_guardrail,
+                        is_followup_affirmation, is_system_identity_question)
+from prompts import (DIRECT_RESPONSE_SYSTEM_PROMPT, GUARDRAIL_SYSTEM_PROMPT,
+                     INTENT_SYSTEM_PROMPT, INTENTS)
 from rag_service import RAGService
 from settings import Settings
+
+FOLLOWUP_TRANSLATED_PREFIX = (
+    "The user wants to continue discussing this mental health topic:"
+)
 
 
 @dataclass
@@ -36,6 +36,7 @@ class RouteResult:
     emotion: dict[str, Any] | None = None
     chunks: list[dict[str, Any]] = field(default_factory=list)
     guardrails: dict[str, Any] | None = None
+    mental_health_topic: str | None = None
 
 
 class MentoPipeline:
@@ -78,14 +79,32 @@ class MentoPipeline:
         self.language_detector = LanguageDetector(settings)
         self.emotion_detector = EmotionDetector(settings)
         self.rag = RAGService(settings, self.rag_llm)
+        self._state_lock = threading.Lock()
         self.histories: dict[str, list[HumanMessage | AIMessage]] = {}
         self.last_mental_health_topic: dict[str, str] = {}
 
     def get_history(self, session_id: str) -> list[HumanMessage | AIMessage]:
-        return self.histories.setdefault(session_id, [])
+        with self._state_lock:
+            return self.histories.setdefault(session_id, [])
+
+    def _history_snapshot(self, session_id: str) -> list[HumanMessage | AIMessage]:
+        with self._state_lock:
+            return list(self.histories.get(session_id, []))
+
+    def _get_mental_health_topic(self, session_id: str) -> str:
+        with self._state_lock:
+            return self.last_mental_health_topic.get(session_id, "")
+
+    def _update_mental_health_topic(self, session_id: str, route: RouteResult) -> None:
+        if route.translated.startswith(FOLLOWUP_TRANSLATED_PREFIX):
+            return
+        with self._state_lock:
+            self.last_mental_health_topic[session_id] = route.translated
 
     def clear_history(self, session_id: str) -> None:
-        self.histories.pop(session_id, None)
+        with self._state_lock:
+            self.histories.pop(session_id, None)
+            self.last_mental_health_topic.pop(session_id, None)
 
     def analyze_message(self, text: str, language_hint: str) -> dict[str, Any]:
         prompt = ChatPromptTemplate.from_messages(
@@ -109,7 +128,7 @@ class MentoPipeline:
                     "translated": str(parsed.get("translated") or text),
                     "language": str(parsed.get("language") or language_hint),
                     "confidence": float(parsed.get("confidence", 0.5)),
-                    "layer_used": "Layer 2 (LangChain Groq)",
+                    "layer_used": "Layer 2 (LangChain Groq - Intent, Language, Translation)",
                 }
             except Exception as exc:
                 last_error = exc
@@ -124,16 +143,18 @@ class MentoPipeline:
 
     def classify(self, user_text: str, session_id: str | None = None) -> RouteResult:
         if self.crisis_detector.is_crisis(user_text):
+            lang = self.language_detector.detect(user_text)
+            crisis_response = crisis_response_for_language(lang.language)
             return RouteResult(
                 route="crisis",
                 intent="crisis",
                 translated=user_text,
-                language="en",
+                language=lang.language,
                 confidence=1.0,
-                layer_used="Crisis keyword guard",
-                language_hint="en",
-                language_hint_confidence=0.0,
-                response=CRISIS_RESPONSE,
+                layer_used="Layer 1 (Crisis keyword guard)",
+                language_hint=lang.language,
+                language_hint_confidence=lang.confidence,
+                response=crisis_response,
             )
 
         lang = self.language_detector.detect(user_text)
@@ -141,18 +162,25 @@ class MentoPipeline:
         # Module 1 provides only a fast language hint. The intent Groq call must
         # always verify/correct that language before downstream routing.
         llm_result = self.analyze_message(user_text, lang.language)
-        if is_system_identity_question(user_text) or is_system_identity_question(llm_result["translated"]):
+        if is_system_identity_question(user_text) or is_system_identity_question(
+            llm_result["translated"]
+        ):
             llm_result["intent"] = "system_identity"
-            llm_result["confidence"] = max(float(llm_result.get("confidence", 0.0)), 0.99)
-        elif self._is_contextual_mental_health_followup(user_text, llm_result, session_id):
-            previous_topic = self.last_mental_health_topic.get(session_id or "", "")
-            llm_result["intent"] = "asking_mental_health_question"
-            llm_result["translated"] = (
-                "The user wants to continue discussing this mental health topic: "
-                f"{previous_topic}"
+            llm_result["confidence"] = max(
+                float(llm_result.get("confidence", 0.0)), 0.99
             )
-            llm_result["confidence"] = max(float(llm_result.get("confidence", 0.0)), 0.95)
-            llm_result["layer_used"] = f"{llm_result['layer_used']} + Conversation follow-up"
+        elif self._is_contextual_mental_health_followup(
+            user_text, llm_result, session_id
+        ):
+            previous_topic = self._get_mental_health_topic(session_id)
+            llm_result["intent"] = "asking_mental_health_question"
+            llm_result["translated"] = f"{FOLLOWUP_TRANSLATED_PREFIX} {previous_topic}"
+            llm_result["confidence"] = max(
+                float(llm_result.get("confidence", 0.0)), 0.95
+            )
+            llm_result["layer_used"] = (
+                f"{llm_result['layer_used']} + Conversation follow-up"
+            )
 
         intent = llm_result["intent"]
         route = "rag_pipeline" if intent == "asking_mental_health_question" else intent
@@ -172,7 +200,9 @@ class MentoPipeline:
             language_hint_confidence=lang.confidence,
         )
 
-    def stream(self, user_text: str, session_id: str) -> Generator[dict[str, Any], None, None]:
+    def stream(
+        self, user_text: str, session_id: str
+    ) -> Generator[dict[str, Any], None, None]:
         user_text = (user_text or "").strip()
         if not user_text:
             yield {"type": "error", "message": "Please enter a message."}
@@ -182,7 +212,10 @@ class MentoPipeline:
         yield {"type": "metadata", "data": asdict(route)}
 
         if route.route == "crisis":
-            yield from self._stream_static(route.response or CRISIS_RESPONSE)
+            response = route.response or crisis_response_for_language(route.language)
+            route.response = response
+            yield from self._emit_answer(response)
+            self._remember(session_id, user_text, response)
             yield {"type": "done", "data": asdict(route)}
             return
 
@@ -190,37 +223,46 @@ class MentoPipeline:
             response = "I want to make sure I understand you correctly. Could you rephrase that?"
             route.route = "clarification"
             route.response = response
-            yield from self._stream_static(response)
+            yield from self._emit_answer(response)
+            self._remember(session_id, user_text, response)
             yield {"type": "done", "data": asdict(route)}
             return
 
         if route.route in {"direct", "out_of_scope"}:
-            response = yield from self._stream_direct_response(route, user_text)
+            response = self._generate_direct_response(route, user_text)
+            response, route.guardrails = self._finalize_response(
+                user_text, response, route.language
+            )
             route.response = response
-            self.last_mental_health_topic[session_id] = route.translated
+            yield from self._emit_answer(response)
             self._remember(session_id, user_text, response)
             yield {"type": "done", "data": asdict(route)}
             return
 
         if route.route == "rag_pipeline":
-            response = yield from self._stream_rag(route, user_text, session_id)
-            guarded = self.apply_guardrails(user_text, response, route.language)
-            route.guardrails = guarded
-            if guarded.get("is_hallucinated") and guarded.get("revised_response"):
-                replacement = str(guarded["revised_response"])
-                yield {"type": "replace", "text": replacement}
-                response = replacement
+            response = yield from self._prepare_rag(route, user_text, session_id)
+            response, route.guardrails = self._finalize_response(
+                user_text, response, route.language
+            )
             route.response = response
+            self._update_mental_health_topic(session_id, route)
+            route.mental_health_topic = (
+                self._get_mental_health_topic(session_id) or None
+            )
+            yield from self._emit_answer(response)
             self._remember(session_id, user_text, response)
             yield {"type": "done", "data": asdict(route)}
             return
 
         response = "I'm specialized in mental health support. Is there anything related to your emotional wellbeing I can help with?"
         route.response = response
-        yield from self._stream_static(response)
+        yield from self._emit_answer(response)
+        self._remember(session_id, user_text, response)
         yield {"type": "done", "data": asdict(route)}
 
-    def _stream_rag(self, route: RouteResult, user_text: str, session_id: str) -> Generator[dict[str, Any], None, str]:
+    def _prepare_rag(
+        self, route: RouteResult, user_text: str, session_id: str
+    ) -> Generator[dict[str, Any], None, str]:
         try:
             emotion = self.emotion_detector.detect(route.translated)
         except Exception as exc:
@@ -236,21 +278,24 @@ class MentoPipeline:
             yield {"type": "notice", "message": route.emotion["error"]}
 
         if emotion is None:
-            answer = yield from self._stream_resource_fallback(route, user_text, session_id)
-            return answer
+            return self._generate_resource_fallback(route, user_text, session_id)
 
         route.emotion = asdict(emotion)
         yield {"type": "metadata", "data": {"emotion": route.emotion}}
 
         try:
-            chunks = self.rag.retrieve_chunks(route.translated, self.settings.retriever_k)
+            chunks = self.rag.retrieve_chunks(
+                route.translated, self.settings.retriever_k
+            )
         except Exception as exc:
             route.chunks = []
             issue = self._public_runtime_issue(exc)
-            yield {"type": "metadata", "data": {"chunks": route.chunks, "rag_error": issue}}
+            yield {
+                "type": "metadata",
+                "data": {"chunks": route.chunks, "rag_error": issue},
+            }
             yield {"type": "notice", "message": issue}
-            answer = yield from self._stream_resource_fallback(route, user_text, session_id)
-            return answer
+            return self._generate_resource_fallback(route, user_text, session_id)
 
         route.chunks = [
             {
@@ -268,31 +313,34 @@ class MentoPipeline:
             "emotion": emotion.emotion,
             "distress_level": "HIGH" if emotion.high_distress else "NORMAL",
             "verified_language": route.language,
-            "chat_history": self.get_history(session_id),
+            "chat_history": self._history_snapshot(session_id),
         }
 
         answer = ""
         try:
-            for chunk in self.rag.chain.stream(chain_input, config={"metadata": {"session_id": session_id, "system": "Mento"}}):
+            for chunk in self.rag.chain.stream(
+                chain_input,
+                config={"metadata": {"session_id": session_id, "system": "Mento"}},
+            ):
                 token = self._extract_stream_text(chunk)
                 if token:
                     answer += token
-                    yield {"type": "token", "text": token}
         except Exception as exc:
             issue = self._public_runtime_issue(exc)
             yield {"type": "notice", "message": issue}
-            answer = yield from self._stream_resource_fallback(route, user_text, session_id)
-            return answer
+            return self._generate_resource_fallback(route, user_text, session_id)
 
         if not answer.strip():
-            answer = "I hear you, and I am glad you reached out. Try one small grounding step now, such as slowing your breathing, and consider speaking with someone you trust or a mental health professional for support."
-            yield from self._stream_static(answer)
+            answer = (
+                "I hear you, and I am glad you reached out. Try one small grounding step now, such as slowing "
+                "your breathing, and consider speaking with someone you trust or a mental health professional for support."
+            )
 
         return answer.strip()
 
-    def _stream_resource_fallback(self, route: RouteResult, user_text: str, session_id: str) -> Generator[dict[str, Any], None, str]:
-        from langchain_core.prompts import ChatPromptTemplate
-
+    def _generate_resource_fallback(
+        self, route: RouteResult, user_text: str, session_id: str
+    ) -> str:
         prompt = ChatPromptTemplate.from_messages(
             [
                 SystemMessage(
@@ -317,18 +365,22 @@ class MentoPipeline:
                     "translated": route.translated,
                     "original": user_text,
                 },
-                config={"metadata": {"session_id": session_id, "route": "resource_fallback", "system": "Mento"}},
+                config={
+                    "metadata": {
+                        "session_id": session_id,
+                        "route": "resource_fallback",
+                        "system": "Mento",
+                    }
+                },
             ):
                 token = self._extract_stream_text(chunk)
                 if token:
                     answer += token
-                    yield {"type": "token", "text": token}
         except Exception:
             answer = self._localized_support_fallback(route.language)
-            yield from self._stream_static(answer)
         return answer.strip()
 
-    def _stream_direct_response(self, route: RouteResult, user_text: str) -> Generator[dict[str, Any], None, str]:
+    def _generate_direct_response(self, route: RouteResult, user_text: str) -> str:
         prompt = ChatPromptTemplate.from_messages(
             [
                 SystemMessage(content=DIRECT_RESPONSE_SYSTEM_PROMPT),
@@ -340,27 +392,47 @@ class MentoPipeline:
         )
         chain = prompt | self.direct_llm
         answer = ""
-        for chunk in chain.stream(
-            {
-                "intent": route.intent,
-                "language": route.language,
-                "message": user_text,
-            },
-            config={"metadata": {"route": route.route, "system": "Mento"}},
-        ):
-            token = self._extract_stream_text(chunk)
-            if token:
-                answer += token
-                yield {"type": "token", "text": token}
+        try:
+            for chunk in chain.stream(
+                {
+                    "intent": route.intent,
+                    "language": route.language,
+                    "message": user_text,
+                },
+                config={"metadata": {"route": route.route, "system": "Mento"}},
+            ):
+                token = self._extract_stream_text(chunk)
+                if token:
+                    answer += token
+        except Exception:
+            return self._direct_fallback(route)
         if not answer.strip():
-            answer = self._direct_fallback(route)
-            yield from self._stream_static(answer)
+            return self._direct_fallback(route)
         return answer.strip()
 
-    def apply_guardrails(self, user_text: str, response: str, language: str) -> dict[str, Any]:
+    def _finalize_response(
+        self, user_text: str, response: str, language: str
+    ) -> tuple[str, dict[str, Any]]:
+        guarded = self.apply_guardrails(user_text, response, language)
+        if guarded.get("is_hallucinated"):
+            return (
+                str(
+                    guarded.get("revised_response")
+                    or self._localized_support_fallback(language)
+                ).strip(),
+                guarded,
+            )
+        return response.strip(), guarded
+
+    def apply_guardrails(
+        self, user_text: str, response: str, language: str
+    ) -> dict[str, Any]:
         heuristic = heuristic_guardrail(user_text, response)
-        if heuristic["is_hallucinated"]:
-            return heuristic
+        llm_result: dict[str, Any] = {
+            "is_hallucinated": False,
+            "flags": [],
+            "revised_response": None,
+        }
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -372,25 +444,50 @@ class MentoPipeline:
             ]
         )
         try:
-            raw = (prompt | self.guardrail_llm).invoke(
-                {"language": language, "user_text": user_text, "response": response}
-            ).content
+            raw = (
+                (prompt | self.guardrail_llm)
+                .invoke(
+                    {"language": language, "user_text": user_text, "response": response}
+                )
+                .content
+            )
             parsed = self._parse_json(raw)
             safe = bool(parsed.get("safe", True))
-            return {
+            llm_result = {
                 "is_hallucinated": not safe,
-                "flags": [] if safe else [str(parsed.get("reason", "LLM guardrail flagged response"))],
-                "revised_response": parsed.get("revised_response") if not safe else None,
+                "flags": (
+                    []
+                    if safe
+                    else [str(parsed.get("reason", "LLM guardrail flagged response"))]
+                ),
+                "revised_response": (
+                    parsed.get("revised_response") if not safe else None
+                ),
             }
         except Exception:
-            return heuristic
+            pass
+
+        is_hallucinated = bool(heuristic.get("is_hallucinated")) or bool(
+            llm_result.get("is_hallucinated")
+        )
+        flags = list(heuristic.get("flags", [])) + list(llm_result.get("flags", []))
+        revised_response = llm_result.get("revised_response")
+        if is_hallucinated and not revised_response:
+            revised_response = self._localized_support_fallback(language)
+
+        return {
+            "is_hallucinated": is_hallucinated,
+            "flags": flags,
+            "revised_response": revised_response if is_hallucinated else None,
+        }
 
     def _remember(self, session_id: str, user_text: str, response: str) -> None:
-        history = self.get_history(session_id)
-        history.append(HumanMessage(content=user_text))
-        history.append(AIMessage(content=response))
-        if len(history) > 12:
-            del history[: len(history) - 12]
+        with self._state_lock:
+            history = self.histories.setdefault(session_id, [])
+            history.append(HumanMessage(content=user_text))
+            history.append(AIMessage(content=response))
+            if len(history) > 12:
+                del history[: len(history) - 12]
 
     def _direct_fallback(self, route: RouteResult) -> str:
         if route.route == "out_of_scope":
@@ -406,10 +503,21 @@ class MentoPipeline:
     @staticmethod
     def _parse_json(raw: str) -> dict[str, Any]:
         cleaned = re.sub(r"```json|```", "", raw or "").strip()
-        match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
-        if match:
-            cleaned = match.group(0)
-        return json.loads(cleaned)
+        try:
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+        start = cleaned.find("{")
+        if start == -1:
+            raise ValueError("No JSON object found in model output")
+
+        parsed, _ = json.JSONDecoder().raw_decode(cleaned, start)
+        if not isinstance(parsed, dict):
+            raise ValueError("Expected a JSON object in model output")
+        return parsed
 
     @staticmethod
     def _extract_stream_text(chunk: Any) -> str:
@@ -428,7 +536,11 @@ class MentoPipeline:
     @staticmethod
     def _public_runtime_issue(exc: Exception) -> str:
         message = str(exc).lower()
-        if isinstance(exc, MemoryError) or "paging file is too small" in message or "os error 1455" in message:
+        if (
+            isinstance(exc, MemoryError)
+            or "paging file is too small" in message
+            or "os error 1455" in message
+        ):
             return "Local memory is too low to load the RAG resources right now, so I am using a safe fallback response."
         if "network error" in message or "connection" in message:
             return "A RAG network call was unavailable, so I am using a safe fallback response."
@@ -446,14 +558,14 @@ class MentoPipeline:
         llm_result: dict[str, Any],
         session_id: str | None,
     ) -> bool:
-        if not session_id or session_id not in self.last_mental_health_topic:
+        if not session_id or not self._get_mental_health_topic(session_id):
             return False
         if llm_result.get("intent") == "asking_mental_health_question":
             return False
         return is_followup_affirmation(user_text)
 
     @staticmethod
-    def _stream_static(text: str) -> Generator[dict[str, Any], None, None]:
+    def _emit_answer(text: str) -> Generator[dict[str, Any], None, None]:
         words = text.split(" ")
         for index, word in enumerate(words):
             suffix = " " if index < len(words) - 1 else ""

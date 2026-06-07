@@ -55,11 +55,11 @@ Mento - Module 4 usage steps
    If Windows memory/pagefile is low, Mento automatically uses a lighter heuristic
    emotion fallback instead of loading the large local Module 2 PyTorch model.
    You can force that behavior with:
-   MENTO_USE_LOCAL_EMOTION_MODEL=false
+   USE_LOCAL_EMOTION_MODEL=false
 
    Thresholds can be adjusted in Module 4/.env:
-   MENTO_MIN_AVAILABLE_PAGEFILE_MB=4096
-   MENTO_MIN_EMBEDDING_PAGEFILE_MB=1024
+   MIN_AVAILABLE_PAGEFILE_MB=4096
+   MIN_EMBEDDING_PAGEFILE_MB=1024
 
 7. Start the Flask app:
    python app.py

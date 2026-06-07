@@ -5,11 +5,11 @@ import uuid
 from functools import lru_cache
 from typing import Any
 
-from flask import Flask, Response, jsonify, render_template, request, stream_with_context
+from flask import (Flask, Response, jsonify, render_template, request,
+                   stream_with_context)
 
 from mento_pipeline import MentoPipeline
 from settings import load_settings
-
 
 app = Flask(__name__)
 settings = load_settings()
@@ -29,7 +29,11 @@ def sse(event: dict[str, Any]) -> str:
 
 def public_error(exc: Exception) -> str:
     message = str(exc).lower()
-    if isinstance(exc, MemoryError) or "paging file is too small" in message or "os error 1455" in message:
+    if (
+        isinstance(exc, MemoryError)
+        or "paging file is too small" in message
+        or "os error 1455" in message
+    ):
         return "Local memory is too low to complete that operation right now. Please close other apps or increase the Windows paging file, then try again."
     if "network error" in message or "connection" in message:
         return "A local or external network connection failed during this request. Please try again after confirming Flask, Groq, and Qdrant are reachable."
@@ -85,7 +89,9 @@ def chat_stream() -> Response:
     payload = request.get_json(silent=True) or {}
     message = str(payload.get("message") or "")
     session_id = str(payload.get("session_id") or uuid.uuid4())
-    last_mental_health_topic = str(payload.get("last_mental_health_topic") or "").strip()
+    last_mental_health_topic = str(
+        payload.get("last_mental_health_topic") or ""
+    ).strip()
     if last_mental_health_topic:
         get_pipeline().last_mental_health_topic[session_id] = last_mental_health_topic
 
