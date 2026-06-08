@@ -1,0 +1,126 @@
+name: Deploy to Hugging Face Space
+
+# Push the contents of "Final System Files/Module 4" to a Hugging Face Space
+# every time the main branch is updated (or on manual trigger).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Final System Files/Module 4/**"
+      - ".github/workflows/deploy-hf-space.yml"
+  workflow_dispatch:
+    inputs:
+      space_repo:
+        description: "HF Space repo (owner/name) to override the default"
+        required: false
+
+concurrency:
+  group: deploy-hf-space
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve target Space repo
+        id: target
+        env:
+          DEFAULT_SPACE_REPO: ${{ vars.HF_SPACE_REPO }}
+          INPUT_SPACE_REPO: ${{ inputs.space_repo }}
+        run: |
+          if [ -n "$INPUT_SPACE_REPO" ]; then
+            SPACE_REPO="$INPUT_SPACE_REPO"
+          elif [ -n "$DEFAULT_SPACE_REPO" ]; then
+            SPACE_REPO="$DEFAULT_SPACE_REPO"
+          else
+            echo "::error::HF Space repo not set. Either define the repo variable 'HF_SPACE_REPO' (Settings → Variables → Actions) or supply the 'space_repo' workflow input."
+            exit 1
+          fi
+          echo "space_repo=$SPACE_REPO" >> "$GITHUB_OUTPUT"
+          echo "Deploying to Space: $SPACE_REPO"
+
+      - name: Stage Module 4 as Space root
+        run: |
+          set -euo pipefail
+          rm -rf space
+          mkdir -p space
+          # Copy the entire Module 4 directory to the Space root.
+          shopt -s dotglob
+          cp -R "Final System Files/Module 4"/. space/
+          shopt -u dotglob
+
+          # Copy Module 1 models to maintain the relative path structure expected by settings.py
+          mkdir -p "space/Module 1/models"
+          cp -R "Final System Files/Module 1/models"/. "space/Module 1/models/"
+
+          # Sanity checks
+          test -f space/app.py
+          test -f space/Dockerfile
+          test -f space/requirements.txt
+          test -f space/README.md
+          test -d "space/Module 1/models"
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SPACE_REPO: ${{ steps.target.outputs.space_repo }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HF_TOKEN:-}" ]; then
+            echo "::error::Secret HF_TOKEN is missing. Add a write-access Hugging Face token in Settings → Secrets → Actions."
+            exit 1
+          fi
+          python -m pip install --quiet --upgrade huggingface_hub
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          space_id = os.environ["SPACE_REPO"]
+
+          # Create the Space if it does not exist yet. Using SDK "docker" matches
+          # the Dockerfile we ship in the Space root.
+          api.create_repo(
+              repo_id=space_id,
+              repo_type="space",
+              space_sdk="docker",
+              exist_ok=True,
+              private=False,
+          )
+
+          api.upload_folder(
+              folder_path="space",
+              repo_id=space_id,
+              repo_type="space",
+              commit_message="Deploy Mento from GitHub Actions",
+              ignore_patterns=[
+                  "__pycache__/**",
+                  "*.pyc",
+                  ".venv/**",
+                  "venv/**",
+                  ".env",
+                  ".env.*",
+                  "*.pt",
+                  "*.bin",
+                  "*.safetensors",
+                  "index_metadata.json",
+                  "*.ipynb_checkpoints/**",
+              ],
+          )
+          print(f"Uploaded space contents to https://huggingface.co/spaces/{space_id}")
+          PY
