@@ -162,7 +162,10 @@ class LanguageDetector:
 
     def _first_existing(self, names: list[str]) -> Path:
         for name in names:
-            path = self.settings.module1_models_dir / name
+            path = self.settings.module1_models_dir_local / name
+            if path.exists():
+                return path
+            path = self.settings.module1_models_dir_space / name
             if path.exists():
                 return path
         choices = ", ".join(names)

@@ -42,7 +42,8 @@ class Settings:
     base_dir: Path = BASE_DIR
     project_root: Path = PROJECT_ROOT
 
-    module1_models_dir: Path = PROJECT_ROOT / "Module 1" / "models"
+    module1_models_dir_local: Path = PROJECT_ROOT / "Module 1" / "models"
+    module1_models_dir_space: Path = BASE_DIR / "Module 1" / "models"
     module2_model_dir: Path = (
         PROJECT_ROOT / "Module 2" / "models" / "emotion_classifier"
     )
