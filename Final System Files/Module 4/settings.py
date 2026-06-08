@@ -114,21 +114,21 @@ def load_settings() -> Settings:
         qdrant_collection=os.getenv("QDRANT_COLLECTION", "Mental-Health"),
         qdrant_vector_name=os.getenv("QDRANT_VECTOR_NAME") or None,
         dataset_name=os.getenv(
-            "MENTO_DATASET_NAME", "Amod/mental_health_counseling_conversations"
+            "DATASET_NAME", "Amod/mental_health_counseling_conversations"
         ),
-        dataset_split=os.getenv("MENTO_DATASET_SPLIT", "train"),
+        dataset_split=os.getenv("DATASET_SPLIT", "train"),
         embedding_model=os.getenv(
-            "MENTO_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+            "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
         ),
-        chunk_size=_int_env("MENTO_CHUNK_SIZE", 900),
-        chunk_overlap=_int_env("MENTO_CHUNK_OVERLAP", 120),
-        retriever_k=_int_env("MENTO_RETRIEVER_K", 4),
-        max_dataset_rows=_int_env("MENTO_MAX_DATASET_ROWS", 0),
-        force_rebuild_index=_bool_env("MENTO_FORCE_REBUILD_INDEX", False),
-        build_index_on_startup=_bool_env("MENTO_BUILD_INDEX_ON_STARTUP", False),
-        use_local_emotion_model=_bool_env("MENTO_USE_LOCAL_EMOTION_MODEL", True),
-        min_available_pagefile_mb=_int_env("MENTO_MIN_AVAILABLE_PAGEFILE_MB", 4096),
-        min_embedding_pagefile_mb=_int_env("MENTO_MIN_EMBEDDING_PAGEFILE_MB", 1024),
+        chunk_size=_int_env("CHUNK_SIZE", 900),
+        chunk_overlap=_int_env("CHUNK_OVERLAP", 120),
+        retriever_k=_int_env("RETRIEVER_K", 4),
+        max_dataset_rows=_int_env("MAX_DATASET_ROWS", 0),
+        force_rebuild_index=_bool_env("FORCE_REBUILD_INDEX", False),
+        build_index_on_startup=_bool_env("BUILD_INDEX_ON_STARTUP", False),
+        use_local_emotion_model=_bool_env("USE_LOCAL_EMOTION_MODEL", True),
+        min_available_pagefile_mb=_int_env("MIN_AVAILABLE_PAGEFILE_MB", 4096),
+        min_embedding_pagefile_mb=_int_env("MIN_EMBEDDING_PAGEFILE_MB", 1024),
         langsmith_project=langsmith_project,
         flask_host=os.getenv("FLASK_RUN_HOST", "127.0.0.1"),
         flask_port=_int_env("FLASK_RUN_PORT", 5000),

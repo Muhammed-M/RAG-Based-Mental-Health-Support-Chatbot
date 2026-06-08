@@ -176,7 +176,6 @@ class LanguageDetector:
             [re.sub(r"\s+", " ", (text or "").strip().lower())]
         )
         prediction = self.classifier.predict(features)[0]
-        print(prediction)
         language = prediction
 
         confidence = 0.0
