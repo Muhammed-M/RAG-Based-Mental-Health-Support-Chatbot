@@ -30,6 +30,7 @@ Mento - Module 4 usage steps
 
    Optional LangSmith tracing values:
    LANGSMITH_TRACING=true
+   LANGSMITH_TRACING_V2=true
    LANGCHAIN_TRACING_V2=true
    LANGSMITH_API_KEY=your_langsmith_key
    LANGSMITH_PROJECT=Mento-Module-4
@@ -59,7 +60,7 @@ Mento - Module 4 usage steps
 
    Thresholds can be adjusted in Module 4/.env:
    MIN_AVAILABLE_PAGEFILE_MB=4096
-   MIN_EMBEDDING_PAGEFILE_MB=1024
+   MIN_EMBEDDING_PAGEFILE_MB=0
 
 7. Start the Flask app:
    python app.py
@@ -69,7 +70,9 @@ Mento - Module 4 usage steps
 
 9. Validate the required pipeline behavior:
    - If the user asks the system name, Mento answers that its name is Mento.
-   - Crisis keywords return the immediate hardcoded crisis response.
+   - Direct/immediate crisis intent returns a hardcoded safety response, then a
+     crisis-aware RAG follow-up. Historical or negated suicide mentions continue
+     through the normal mental-health RAG flow.
    - Module 1 gives a local TF-IDF language hint.
    - LangChain + Groq performs the single routing call:
      language verification, intent classification, English translation, and typo cleanup.
@@ -77,9 +80,15 @@ Mento - Module 4 usage steps
    - Greeting, goodbye, gratitude, and out_of_scope messages are handled politely with LangChain + Groq.
    - Mental-health questions run Module 2 emotion detection on cleaned English text.
    - Module 4 retrieves Qdrant RAG chunks using the cleaned English query.
+   - In LangSmith, check the run named Mento.RAG.answer_from_retrieved_chunks
+     or Mento.guardrail.check_response_with_chunks. Their Input/Metadata includes
+     retrieved_chunks with source, score, metadata, and content_preview.
    - The conversational RAG chain uses chat memory and streams the response.
    - The final response is written in the verified user language.
    - Post-guardrails check for unsafe hallucinations and revise if needed.
+   - Direct crisis safety messages are hardcoded for English, Arabic, Spanish,
+     French, Chinese, and Hindi. Other detected languages use English for the
+     first safety message, then continue through the normal RAG follow-up.
 
 10. Useful health check:
    GET http://127.0.0.1:5000/api/health

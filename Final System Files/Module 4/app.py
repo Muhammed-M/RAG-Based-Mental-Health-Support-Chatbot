@@ -45,6 +45,11 @@ def index() -> str:
     return render_template("index.html", system_name="Mento")
 
 
+@app.get("/favicon.ico")
+def favicon() -> Response:
+    return Response(status=204)
+
+
 @app.get("/api/health")
 def health() -> Any:
     pipeline = get_pipeline()

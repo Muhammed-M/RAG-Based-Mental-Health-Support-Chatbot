@@ -16,12 +16,13 @@ A multilingual mental health support chatbot combining local ML models, Groq-hos
 LLM reasoning, and LangChain-powered retrieval augmented generation. Built as a final
 project for the ITI NLP & LLM track.
 
-> Your life matters.
+> Your Life Matters
 
 > **Safety note:** Mento is an educational NLP project. It is **not** a replacement
 > for a licensed mental health professional or emergency support. If a user expresses
 > immediate self-harm or suicide risk, the system returns a hardcoded crisis response
-> and encourages contacting emergency or crisis services immediately.
+> in English, Arabic, Spanish, French, Chinese, or Hindi, encourages emergency or
+> crisis support immediately, then continues with a brief safety-aware RAG follow-up.
 
 ## Required Space Secrets
 
@@ -38,6 +39,9 @@ Configure these under **Settings → Secrets** in your Hugging Face Space:
 | `MENTO_USE_LOCAL_EMOTION_MODEL` | no | Defaults to `false` on the Space (set `true` to enable the local PyTorch model) |
 | `LANGSMITH_API_KEY` | no | Enables LangSmith tracing |
 | `LANGSMITH_PROJECT` | no | Defaults to `Mental Health Rag ChatBot` |
+
+Retrieved chunks are visible in LangSmith on `Mento.RAG.answer_from_retrieved_chunks`
+and `Mento.guardrail.check_response_with_chunks` as `retrieved_chunks` input/metadata.
 
 The first time the Space boots, Mento will build the Qdrant vector index from
 `Amod/mental_health_counseling_conversations`. After that the cached Qdrant collection

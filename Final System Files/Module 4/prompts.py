@@ -29,6 +29,10 @@ Supported language codes: {SUPPORTED_LANGUAGES}.
 Rules:
 - Mental health, emotions, sleep trouble, anxiety, sadness, stress, relationships, coping,
   therapy, grief, loneliness, habits, and wellbeing are asking_mental_health_question.
+- Self-harm, suicide, wanting to die, death wishes, or unsafe impulses are
+  asking_mental_health_question. Never mark them out_of_scope.
+- Preserve direct safety urgency in the English translation, including words like
+  now, tonight, today, plan, kill myself, end my life, suicide, or self-harm.
 - Questions about your name, who you are, or the system name are system_identity.
 - A short greeting/goodbye/gratitude is direct only when it is not part of a mental-health concern.
 - "I said goodbye to my old bad habits" is a mental-health question, not goodbye.

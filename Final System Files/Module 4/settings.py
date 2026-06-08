@@ -73,7 +73,7 @@ class Settings:
     build_index_on_startup: bool = False
     use_local_emotion_model: bool = True
     min_available_pagefile_mb: int = 4096
-    min_embedding_pagefile_mb: int = 1024
+    min_embedding_pagefile_mb: int = 0
 
     langsmith_project: str = "Mental Health Rag ChatBot"
     flask_host: str = "127.0.0.1"
@@ -96,6 +96,7 @@ def load_settings() -> Settings:
         os.environ.setdefault("LANGCHAIN_PROJECT", langsmith_project)
     if os.getenv("LANGSMITH_API_KEY"):
         os.environ.setdefault("LANGSMITH_TRACING", "true")
+        os.environ.setdefault("LANGSMITH_TRACING_V2", "true")
         os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
 
     return Settings(
@@ -129,7 +130,7 @@ def load_settings() -> Settings:
         build_index_on_startup=_bool_env("BUILD_INDEX_ON_STARTUP", False),
         use_local_emotion_model=_bool_env("USE_LOCAL_EMOTION_MODEL", True),
         min_available_pagefile_mb=_int_env("MIN_AVAILABLE_PAGEFILE_MB", 4096),
-        min_embedding_pagefile_mb=_int_env("MIN_EMBEDDING_PAGEFILE_MB", 1024),
+        min_embedding_pagefile_mb=_int_env("MIN_EMBEDDING_PAGEFILE_MB", 0),
         langsmith_project=langsmith_project,
         flask_host=os.getenv("FLASK_RUN_HOST", "127.0.0.1"),
         flask_port=_int_env("FLASK_RUN_PORT", 5000),

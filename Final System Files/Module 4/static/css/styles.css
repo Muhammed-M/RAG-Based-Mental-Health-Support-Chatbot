@@ -92,6 +92,13 @@ h1 {
   line-height: 1.05;
 }
 
+.slogan {
+  margin: 6px 0 0;
+  color: #315d52;
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
 .status-pill {
   min-width: 82px;
   padding: 7px 10px;

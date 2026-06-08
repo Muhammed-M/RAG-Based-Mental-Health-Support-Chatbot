@@ -8,6 +8,7 @@ const clearButton = document.querySelector("#clear-button");
 let sessionId = localStorage.getItem("mento_session_id") || crypto.randomUUID();
 localStorage.setItem("mento_session_id", sessionId);
 let lastMentalHealthTopic = localStorage.getItem("mento_last_mental_health_topic") || "";
+let activeChatController = null;
 
 function addMessage(role, text = "") {
   const article = document.createElement("article");
@@ -25,6 +26,17 @@ function setBusy(isBusy) {
   sendButton.disabled = isBusy;
   input.disabled = isBusy;
   statusEl.textContent = isBusy ? "Thinking" : "Ready";
+}
+
+function resetConversation() {
+  sessionId = crypto.randomUUID();
+  lastMentalHealthTopic = "";
+  localStorage.setItem("mento_session_id", sessionId);
+  localStorage.removeItem("mento_last_mental_health_topic");
+  input.value = "";
+  autoresize();
+  messages.innerHTML = "";
+  addMessage("assistant", "Hello, I'm Mento. What's on your mind today?");
 }
 
 function updateMetadata(data) {
@@ -56,6 +68,8 @@ async function parseStream(response, assistantBubble) {
       } else if (payload.type === "token") {
         assistantBubble.textContent += payload.text;
         messages.scrollTop = messages.scrollHeight;
+      } else if (payload.type === "new_assistant_message") {
+        assistantBubble = addMessage("assistant", "");
       } else if (payload.type === "replace") {
         assistantBubble.textContent = payload.text;
       } else if (payload.type === "notice") {
@@ -96,11 +110,14 @@ form.addEventListener("submit", async (event) => {
   autoresize();
   const assistantBubble = addMessage("assistant", "");
   setBusy(true);
+  const chatController = new AbortController();
+  activeChatController = chatController;
 
   try {
     const response = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: chatController.signal,
       body: JSON.stringify({
         message,
         session_id: sessionId,
@@ -109,26 +126,39 @@ form.addEventListener("submit", async (event) => {
     });
     await parseStream(response, assistantBubble);
   } catch (error) {
+    if (error.name === "AbortError") return;
     const message = String(error.message || "").toLowerCase();
     assistantBubble.textContent = message.includes("network") || message.includes("failed to fetch")
       ? "The local Flask connection stopped during this request. Please restart or refresh Mento, then try again."
       : error.message;
   } finally {
+    if (activeChatController === chatController) {
+      activeChatController = null;
+    }
     setBusy(false);
     input.focus();
   }
 });
 
 clearButton.addEventListener("click", async () => {
-  await fetch("/api/chat/clear", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId }),
-  });
-  sessionId = crypto.randomUUID();
-  lastMentalHealthTopic = "";
-  localStorage.setItem("mento_session_id", sessionId);
-  localStorage.removeItem("mento_last_mental_health_topic");
-  messages.innerHTML = "";
-  addMessage("assistant", "Hello, I'm Mento. What's on your mind today?");
+  const sessionToClear = sessionId;
+  if (activeChatController) {
+    activeChatController.abort();
+    activeChatController = null;
+  }
+  clearButton.disabled = true;
+  statusEl.textContent = "Clearing";
+
+  try {
+    await fetch("/api/chat/clear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionToClear }),
+    });
+  } finally {
+    resetConversation();
+    clearButton.disabled = false;
+    setBusy(false);
+    input.focus();
+  }
 });

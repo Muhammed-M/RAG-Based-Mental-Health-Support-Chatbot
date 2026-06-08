@@ -11,6 +11,16 @@ from components import has_available_pagefile
 from prompts import HISTORY_AWARE_RETRIEVER_PROMPT, RAG_SYSTEM_PROMPT
 from settings import Settings
 
+try:
+    from langsmith import traceable
+except ImportError:
+
+    def traceable(*args: Any, **kwargs: Any) -> Any:
+        def decorator(func: Any) -> Any:
+            return func
+
+        return decorator
+
 
 @dataclass
 class RetrievedChunk:
@@ -18,6 +28,36 @@ class RetrievedChunk:
     source: str
     score: float | None = None
     metadata: dict[str, Any] | None = None
+
+
+def _trace_retrieve_inputs(inputs: dict[str, Any]) -> dict[str, Any]:
+    service = inputs.get("self")
+    settings = getattr(service, "settings", None)
+    return {
+        "query": inputs.get("query"),
+        "k": inputs.get("k"),
+        "collection": getattr(settings, "qdrant_collection", None),
+        "embedding_model": getattr(settings, "embedding_model", None),
+    }
+
+
+def _trace_retrieve_outputs(
+    outputs: list[RetrievedChunk] | None,
+) -> list[dict[str, Any]] | None:
+    if outputs is None:
+        return None
+    traced_chunks = []
+    for chunk in outputs:
+        traced_chunks.append(
+            {
+                "content_preview": chunk.content,
+                "content_length": len(chunk.content),
+                "source": chunk.source,
+                "score": chunk.score,
+                "metadata": chunk.metadata or {},
+            }
+        )
+    return traced_chunks
 
 
 class RAGService:
@@ -266,6 +306,13 @@ class RAGService:
                 return lowered[candidate.lower()]
         return None
 
+    @traceable(
+        run_type="retriever",
+        name="Mento.retrieve_chunks",
+        tags=["mento", "rag", "chunks"],
+        process_inputs=_trace_retrieve_inputs,
+        process_outputs=_trace_retrieve_outputs,
+    )
     def retrieve_chunks(self, query: str, k: int | None = None) -> list[RetrievedChunk]:
         self.ensure_index()
         k = k or self.settings.retriever_k
