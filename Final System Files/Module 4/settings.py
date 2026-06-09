@@ -75,6 +75,16 @@ class Settings:
     min_available_pagefile_mb: int = 4096
     min_embedding_pagefile_mb: int = 0
 
+    feedback_google_sheet_id: str = "1Ja4NI2w9YbG6rw623bRDoamtm8YrSmeaChJ44xeuiyY"
+    feedback_google_worksheet_gid: int = 0
+    feedback_google_worksheet_name: str = ""
+    google_service_account_json: str = ""
+    google_service_account_json_b64: str = ""
+    google_service_account_file: str = ""
+    feedback_apps_script_url: str = ""
+    feedback_apps_script_secret: str = ""
+    feedback_apps_script_timeout: float = 10.0
+
     langsmith_project: str = "Mental Health Rag ChatBot"
     flask_host: str = "127.0.0.1"
     flask_port: int = 5000
@@ -131,6 +141,23 @@ def load_settings() -> Settings:
         use_local_emotion_model=_bool_env("USE_LOCAL_EMOTION_MODEL", True),
         min_available_pagefile_mb=_int_env("MIN_AVAILABLE_PAGEFILE_MB", 4096),
         min_embedding_pagefile_mb=_int_env("MIN_EMBEDDING_PAGEFILE_MB", 0),
+        feedback_google_sheet_id=os.getenv(
+            "FEEDBACK_GOOGLE_SHEET_ID",
+            "1Ja4NI2w9YbG6rw623bRDoamtm8YrSmeaChJ44xeuiyY",
+        ),
+        feedback_google_worksheet_gid=_int_env("FEEDBACK_GOOGLE_WORKSHEET_GID", 0),
+        feedback_google_worksheet_name=os.getenv(
+            "FEEDBACK_GOOGLE_WORKSHEET_NAME", ""
+        ),
+        google_service_account_json=os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", ""),
+        google_service_account_json_b64=os.getenv(
+            "GOOGLE_SERVICE_ACCOUNT_JSON_B64", ""
+        ),
+        google_service_account_file=os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
+        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
+        feedback_apps_script_url=os.getenv("FEEDBACK_APPS_SCRIPT_URL", ""),
+        feedback_apps_script_secret=os.getenv("FEEDBACK_APPS_SCRIPT_SECRET", ""),
+        feedback_apps_script_timeout=_float_env("FEEDBACK_APPS_SCRIPT_TIMEOUT", 10.0),
         langsmith_project=langsmith_project,
         flask_host=os.getenv("FLASK_RUN_HOST", "127.0.0.1"),
         flask_port=_int_env("FLASK_RUN_PORT", 5000),

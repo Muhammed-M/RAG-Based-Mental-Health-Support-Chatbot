@@ -8,6 +8,7 @@ from typing import Any
 from flask import (Flask, Response, jsonify, render_template, request,
                    stream_with_context)
 
+from feedback_service import FeedbackLogger, normalize_feedback
 from mento_pipeline import MentoPipeline
 from settings import load_settings
 
@@ -21,6 +22,11 @@ def get_pipeline() -> MentoPipeline:
     if settings.build_index_on_startup:
         pipeline.rag.ensure_index()
     return pipeline
+
+
+@lru_cache(maxsize=1)
+def get_feedback_logger() -> FeedbackLogger:
+    return FeedbackLogger(settings)
 
 
 def sse(event: dict[str, Any]) -> str:
@@ -70,6 +76,15 @@ def health() -> Any:
                 "rag_model": settings.rag_groq_model,
             },
             "langsmith_project": settings.langsmith_project,
+            "feedback": {
+                "apps_script_configured": bool(settings.feedback_apps_script_url),
+                "sheet_configured": bool(settings.feedback_google_sheet_id),
+                "credentials_configured": bool(
+                    settings.google_service_account_json
+                    or settings.google_service_account_json_b64
+                    or settings.google_service_account_file
+                ),
+            },
         }
     )
 
@@ -87,6 +102,41 @@ def clear_chat() -> Any:
     if session_id:
         get_pipeline().clear_history(session_id)
     return jsonify({"status": "cleared"})
+
+
+@app.post("/api/feedback")
+def submit_feedback() -> Any:
+    payload = request.get_json(silent=True) or {}
+    query = str(payload.get("query") or "").strip()
+    response_text = str(payload.get("response") or "").strip()
+
+    try:
+        feedback = normalize_feedback(payload.get("feedback"))
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    if not query or not response_text:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "Query and response are required for feedback.",
+                }
+            ),
+            400,
+        )
+
+    try:
+        get_feedback_logger().append(query, response_text, feedback)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 503
+    except Exception as exc:
+        app.logger.exception("Failed to log feedback")
+        return jsonify({"status": "error", "message": public_error(exc)}), 502
+
+    return jsonify({"status": "logged"})
 
 
 @app.post("/api/chat/stream")

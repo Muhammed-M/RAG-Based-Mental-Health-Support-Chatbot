@@ -148,6 +148,91 @@ h1 {
   background: white;
 }
 
+.followups {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #edf2f0;
+  white-space: normal;
+}
+
+.followups-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #315d52;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.suggestion-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.suggestion-chip {
+  min-height: 32px;
+  padding: 0 10px;
+  border-color: #bfd5ce;
+  background: #f6fbf9;
+  color: #204c42;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.suggestion-chip:hover,
+.feedback-button:hover {
+  border-color: #22785d;
+}
+
+.feedback-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #edf2f0;
+  white-space: normal;
+}
+
+.feedback-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.feedback-button {
+  width: 34px;
+  min-width: 34px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-color: #c9d5d1;
+  background: white;
+  color: #24433b;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.feedback-button.selected,
+.feedback-actions[data-feedback="like"] .feedback-button[data-feedback="like"],
+.feedback-actions[data-feedback="dislike"] .feedback-button[data-feedback="dislike"] {
+  border-color: #22785d;
+  background: var(--mint);
+}
+
+.feedback-button:disabled {
+  cursor: default;
+}
+
+.feedback-state {
+  min-width: 76px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

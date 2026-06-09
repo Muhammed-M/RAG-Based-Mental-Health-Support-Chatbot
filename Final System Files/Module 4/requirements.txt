@@ -1,6 +1,8 @@
 flask
 python-dotenv
+gspread
 groq
+requests
 langchain
 langchain-core
 langchain-community

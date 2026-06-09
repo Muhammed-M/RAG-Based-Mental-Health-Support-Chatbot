@@ -35,6 +35,25 @@ Mento - Module 4 usage steps
    LANGSMITH_API_KEY=your_langsmith_key
    LANGSMITH_PROJECT=Mento-Module-4
 
+   Optional Google Sheets feedback logging:
+   Preferred webhook mode:
+   FEEDBACK_APPS_SCRIPT_URL=https://script.google.com/macros/s/.../exec
+   FEEDBACK_APPS_SCRIPT_SECRET=
+   FEEDBACK_APPS_SCRIPT_TIMEOUT=10
+
+   In the Sheet, open Extensions > Apps Script, paste the contents of
+   apps_script_feedback_webapp.gs, deploy it as a web app, then paste the /exec
+   URL into FEEDBACK_APPS_SCRIPT_URL. Deploy with "Execute as: Me" and access set
+   so Flask can POST to it.
+
+   Older service-account fallback mode:
+   GOOGLE_SERVICE_ACCOUNT_JSON={...service account json...}
+   FEEDBACK_GOOGLE_SHEET_ID=1Ja4NI2w9YbG6rw623bRDoamtm8YrSmeaChJ44xeuiyY
+   FEEDBACK_GOOGLE_WORKSHEET_GID=0
+
+   Mento only appends Query, Response, and Like/Dislike after a user clicks thumbs
+   up or thumbs down.
+
 5. Build or verify the RAG cache.
    The app uses Qdrant as the persistent vector cache. If the configured collection already
    contains vectors, Mento reuses it. If the collection is missing or empty, it loads:
