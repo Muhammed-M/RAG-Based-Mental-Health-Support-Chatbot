@@ -49,5 +49,5 @@ Thumbs.db
 # Metadata
 index_metadata.json
 
-
+# Webapp Script (Google Sheet)
 apps_script_feedback_webapp.gs
